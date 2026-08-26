@@ -41,9 +41,10 @@ session:
       remember_me: "1M"
 
 # --- Identité / reset password ----------------------------------------------
-identity_validation:
-  reset_password:
-    # jwt_secret fourni par l'env var AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET
+# reset_password DÉSACTIVÉ volontairement : pas de flux « email » (on veut
+# uniquement du TOTP Google Authenticator). L'elevated_session (code ponctuel
+# requis pour enregistrer un 2FA) reste actif avec ses valeurs par défaut et
+# est délivré via le notifier filesystem (authelia/notifications.txt).
 
 # --- Stockage (SQLite local, suffisant pour ce setup) ------------------------
 storage:
