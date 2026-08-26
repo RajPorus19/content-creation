@@ -1,42 +1,44 @@
 # Moteur « Reddit story → MP4 »
 
-Pipeline 100 % local : un post Reddit (fourni à la main) → une **vidéo MP4
-verticale 9:16** avec **voix off Fish Speech** + **sous-titres** + **fond en
-boucle**.
+Pipeline 100 % local, style **RedditVideoMakerBot** : un post Reddit (fourni à la
+main) → une **vidéo MP4 verticale 9:16** avec **carte du post façon screenshot
+Reddit** (mode sombre) en overlay sur un **fond gameplay**, le tout narré par
+**Fish Speech**.
 
 > Aucun scraping, aucun upload automatique. Le moteur ne fait que produire un
 > fichier `output/*.mp4` que tu publies ensuite toi-même (ex. BrightBean).
+> Le screenshot est **rendu localement** (Pillow) à partir du texte — on ne
+> touche jamais à Reddit.
 
 ## Prérequis
 
 - `fish-server` qui tourne (API Fish Speech sur `127.0.0.1:8082`).
-- `python3` + `requests` (déjà dispo sur l'hôte).
+- `python3` + `requests` + `Pillow` (déjà dispo sur l'hôte).
 - `ffmpeg` / `ffprobe` (déjà installés).
 
 ## Lancer
 
 ```bash
-# Cas 1 : post collé en argument
 python3 engine/engine.py \
   --title "AITA for refusing to pay for my roommate's dog?" \
   --text "So my roommate got a dog without asking me. The dog chewed up my shoes."
 
-# Cas 2 : post dans un fichier texte
-python3 engine/engine.py --file /tmp/post.txt
-
-# Options utiles
---voice narrator        # voix (dossier fish-speech/references/<voix>)
---background ...        # fond vertical (défaut: engine/assets/background.mp4)
---output /tmp/x.mp4     # chemin de sortie (défaut: engine/output/*.mp4)
+# Options
+--subreddit AmItheAsshole   # r/<subreddit> affiché sur la carte
+--username throwaway_dog    # u/<username> affiché
+--upvotes 12800             # 0 = aléatoire réaliste
+--comments 342              # 0 = aléatoire réaliste
+--voice narrator            # voix (references/<voix>)
+--background /chemin/x.mp4  # fond (défaut: aléatoire dans assets/backgrounds/)
+--output /tmp/x.mp4         # sortie (défaut: engine/output/*.mp4)
+--file /tmp/post.txt        # post depuis un fichier (titre en 1ère ligne)
 ```
 
 ## Pipeline
 
-1. Découpe le texte en phrases (et sous-phrases si trop longues).
-2. TTS Fish Speech phrase par phrase (voix de référence `narrator`).
-3. Concatène l'audio (0.35 s de silence entre phrases).
-4. Génère des sous-titres synchronisés (ASS, blanc + contour noir).
-5. Assemble le MP4 : fond en boucle + sous-titres + audio (FFmpeg).
+1. Rend la carte du post (screenshot Reddit mode sombre, Pillow).
+2. TTS Fish Speech du titre + corps (par morceaux sûrs, concaténés).
+3. Assemble le MP4 : fond gameplay en boucle + carte centrée (opacité 95 %) + narration.
 
 ## Changer le fond (gameplay)
 
@@ -58,8 +60,6 @@ ffmpeg -y -ss 600 -i engine/assets/backgrounds/minecraft-parkour.mp4 -t 120 \
   -c copy -an engine/assets/backgrounds/minecraft-parkour-loop.mp4
 rm engine/assets/backgrounds/minecraft-parkour.mp4
 ```
-
-Ou passe un clip vertical 1080×1920 directement : `--background /chemin/clip.mp4`.
 
 Liste de fonds (Minecraft parkour, GTA, Rocket League, CSGO surf…) dans le repo
 [RedditVideoMakerBot](https://github.com/elebumm/RedditVideoMakerBot) →

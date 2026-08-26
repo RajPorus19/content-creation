@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
 """
-Moteur « Reddit story → MP4 » (100 % local).
+Moteur « Reddit story → MP4 » (100 % local), style RedditVideoMakerBot.
 
 Pipeline :
-  1. Lit un post Reddit (titre + texte, fournis à la main — AUCUN scraping).
-  2. Découpe le texte en phrases.
-  3. TTS Fish Speech (API /v1/tts) phrase par phrase → segments audio.
-  4. Concatène l'audio (avec un léger silence entre phrases).
-  5. Génère des sous-titres synchronisés (ASS).
-  6. Assemble le MP4 vertical 9:16 (fond en boucle + sous-titres + audio).
+  1. Lit un post Reddit (titre + corps, fournis à la main — AUCUN scraping).
+  2. Rend une « capture d'écran » du post (carte Reddit mode sombre, Pillow).
+  3. TTS Fish Speech (voix off) du titre + corps.
+  4. Assemble le MP4 vertical 9:16 : fond gameplay en boucle + carte du post
+     en overlay centré + narration.
 
-Aucun upload automatique : le moteur ne fait que produire un fichier MP4 local
-que tu publies ensuite toi-même (ex. via BrightBean).
+Aucun upload automatique : le moteur ne fait que produire un fichier MP4 local.
 
-Dépendances : python3 + requests (déjà dispo), ffmpeg/ffprobe (déjà installés).
+Dépendances : python3 + requests + Pillow (déjà dispo), ffmpeg/ffprobe.
 """
 
 from __future__ import annotations
@@ -24,11 +22,13 @@ import re
 import subprocess
 import sys
 import tempfile
-import textwrap
-import time
 from pathlib import Path
 
 import requests
+
+# reddit_screenshot.py est dans le même dossier que ce script
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from reddit_screenshot import render_reddit_post
 
 # --------------------------------------------------------------------------- #
 #  Configuration
@@ -36,16 +36,16 @@ import requests
 TTS_URL = "http://127.0.0.1:8082/v1/tts"      # fish-server (bind localhost)
 VOICE = "narrator"                            # reference_id → references/narrator/
 HERE = Path(__file__).resolve().parent
-BACKGROUNDS_DIR = HERE / "assets" / "backgrounds"   # clips gameplay réels (yt-dlp)
+BACKGROUNDS_DIR = HERE / "assets" / "backgrounds"        # clips gameplay réels
 BACKGROUND_FALLBACK = HERE / "assets" / "background.mp4"  # dégradé par défaut
 OUTPUT_DIR = HERE / "output"
-GAP_SECONDS = 0.35                            # silence entre phrases
+GAP_SECONDS = 0.35                            # silence entre segments audio
 SAMPLE_RATE = 44100
+VIDEO_W, VIDEO_H = 1080, 1920                 # 9:16 vertical
 
 
 def choose_background(explicit: str | None) -> Path:
-    """Choisit le fond : celui passé en --background, sinon un clip aléatoire de
-    assets/backgrounds/, sinon le dégradé par défaut."""
+    """Choisit le fond : --background, sinon un clip aléatoire, sinon le dégradé."""
     if explicit and Path(explicit).is_file():
         return Path(explicit)
     clips = sorted(BACKGROUNDS_DIR.glob("*.mp4"))
@@ -53,11 +53,11 @@ def choose_background(explicit: str | None) -> Path:
         return random.choice(clips)
     return BACKGROUND_FALLBACK
 
+
 # --------------------------------------------------------------------------- #
-#  Étape 1 — nettoyage + découpage en phrases
+#  Étape 1 — nettoyage + découpage (pour le TTS, tailles sûres)
 # --------------------------------------------------------------------------- #
 def clean_text(text: str) -> str:
-    """Normalise les espaces / retours à la ligne / artefacts Reddit basiques."""
     text = text.replace("\u2019", "'").replace("\u2018", "'")
     text = text.replace("\u201c", '"').replace("\u201d", '"')
     text = text.replace("\u2026", "...")
@@ -65,38 +65,31 @@ def clean_text(text: str) -> str:
     return text
 
 
-def split_sentences(text: str, max_len: int = 280) -> list[str]:
-    """Découpe en phrases ; les phrases trop longues sont re-découpées."""
+def split_chunks(text: str, max_len: int = 280) -> list[str]:
+    """Découpe en morceaux de taille sûre pour le TTS (aux limites de phrase)."""
     text = clean_text(text)
     parts = re.split(r"(?<=[.!?])\s+", text)
-    sentences: list[str] = []
+    chunks: list[str] = []
     for p in parts:
         p = p.strip()
         if not p:
             continue
         if len(p) <= max_len:
-            sentences.append(p)
+            chunks.append(p)
         else:
-            # re-découpe aux virgules / clauses pour rester sous max_len
-            sentences.extend(_split_long(p, max_len))
-    return sentences
-
-
-def _split_long(segment: str, max_len: int) -> list[str]:
-    chunks = []
-    current = ""
-    for piece in re.split(r"(?<=[,;:])\s+", segment):
-        piece = piece.strip()
-        if not piece:
-            continue
-        if len(current) + len(piece) + 1 <= max_len:
-            current = (current + " " + piece).strip()
-        else:
-            if current:
-                chunks.append(current)
-            current = piece
-    if current:
-        chunks.append(current)
+            cur = ""
+            for piece in re.split(r"(?<=[,;:])\s+", p):
+                piece = piece.strip()
+                if not piece:
+                    continue
+                if len(cur) + len(piece) + 1 <= max_len:
+                    cur = (cur + " " + piece).strip()
+                else:
+                    if cur:
+                        chunks.append(cur)
+                    cur = piece
+            if cur:
+                chunks.append(cur)
     return chunks
 
 
@@ -117,9 +110,7 @@ def tts(text: str, voice: str = VOICE, format: str = "wav") -> bytes:
     }
     resp = requests.post(TTS_URL, json=payload, timeout=600)
     if resp.status_code != 200:
-        raise RuntimeError(
-            f"TTS failed (HTTP {resp.status_code}): {resp.text[:300]}"
-        )
+        raise RuntimeError(f"TTS failed (HTTP {resp.status_code}): {resp.text[:300]}")
     return resp.content
 
 
@@ -135,7 +126,7 @@ def audio_duration(path: Path) -> float:
 
 
 # --------------------------------------------------------------------------- #
-#  Étape 3 — concaténation audio (FFmpeg concat demuxer + silences)
+#  Étape 3 — concaténation audio
 # --------------------------------------------------------------------------- #
 def concat_audio(segments: list[Path], silence: Path, output: Path) -> None:
     lines = []
@@ -154,72 +145,31 @@ def concat_audio(segments: list[Path], silence: Path, output: Path) -> None:
 
 def make_silence(path: Path, seconds: float, sr: int = SAMPLE_RATE) -> None:
     subprocess.run(
-        ["ffmpeg", "-y", "-f", "lavfi", "-i",
-         f"anullsrc=r={sr}:cl=mono", "-t", str(seconds),
-         "-c:a", "pcm_s16le", str(path)],
+        ["ffmpeg", "-y", "-f", "lavfi", "-i", f"anullsrc=r={sr}:cl=mono",
+         "-t", str(seconds), "-c:a", "pcm_s16le", str(path)],
         check=True, capture_output=True,
     )
 
 
 # --------------------------------------------------------------------------- #
-#  Étape 4 — sous-titres ASS
+#  Étape 4 — assemblage MP4 (fond + screenshot Reddit en overlay + audio)
 # --------------------------------------------------------------------------- #
-def fmt_ts(seconds: float) -> str:
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = seconds % 60
-    return f"{h}:{m:02d}:{s:05.2f}"
-
-
-def wrap_ass(text: str, width: int = 30) -> str:
-    return "\\N".join(textwrap.wrap(text, width=width))
-
-
-def build_ass(cues: list[tuple[float, float, str]], font: str = "DejaVu Sans") -> str:
-    header = (
-        "[Script Info]\n"
-        "ScriptType: v4.00+\n"
-        "PlayResX: 1080\n"
-        "PlayResY: 1920\n"
-        "ScaledBorderAndShadow: yes\n"
-        "\n"
-        "[V4+ Styles]\n"
-        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
-        "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
-        "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
-        "Alignment, MarginL, MarginR, MarginV, Encoding\n"
-        f"Style: Default,{font},62,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,"
-        "-1,0,0,0,100,100,0,0,1,3,1,2,60,60,200,1\n"
-        "\n"
-        "[Events]\n"
-        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-    )
-    events = []
-    for start, end, txt in cues:
-        events.append(
-            f"Dialogue: 0,{fmt_ts(start)},{fmt_ts(end)},Default,,0,0,0,,{wrap_ass(txt)}"
-        )
-    return header + "\n".join(events) + "\n"
-
-
-# --------------------------------------------------------------------------- #
-#  Étape 5 — assemblage MP4 (FFmpeg)
-# --------------------------------------------------------------------------- #
-def assemble(background: Path, audio: Path, ass: Path, output: Path, duration: float) -> None:
-    # Échappe les caractères spéciaux du chemin ASS pour le filtre subtitles
-    ass_esc = str(ass).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+def assemble(background: Path, screenshot: Path, audio: Path, output: Path, duration: float) -> None:
     vf = (
-        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
-        "crop=1080:1920,setsar=1,"
-        f"subtitles='{ass_esc}'[v]"
+        f"[0:v]scale={VIDEO_W}:{VIDEO_H}:force_original_aspect_ratio=increase,"
+        f"crop={VIDEO_W}:{VIDEO_H},setsar=1[bg];"
+        f"[1:v]scale={VIDEO_W - 110}:{VIDEO_H}:force_original_aspect_ratio=decrease,"
+        f"colorchannelmixer=aa=0.95[ov];"
+        "[bg][ov]overlay=x=(W-w)/2:y=(H-h)/2[v]"
     )
     cmd = [
         "ffmpeg", "-y",
         "-stream_loop", "-1", "-i", str(background),
+        "-i", str(screenshot),
         "-i", str(audio),
         "-filter_complex", vf,
-        "-map", "[v]", "-map", "1:a",
-        "-t", f"{duration:.3f}",   # borne la sortie à la durée audio (évite la queue de fond)
+        "-map", "[v]", "-map", "2:a",
+        "-t", f"{duration:.3f}",
         "-shortest",
         "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-r", "30",
         "-pix_fmt", "yuv420p",
@@ -234,70 +184,68 @@ def assemble(background: Path, audio: Path, ass: Path, output: Path, duration: f
 # --------------------------------------------------------------------------- #
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Reddit post → MP4 vertical (voix Fish Speech + sous-titres)"
+        description="Reddit post → MP4 vertical (screenshot Reddit + voix Fish Speech)"
     )
-    ap.add_argument("--title", type=str, default="", help="Titre du post (hook)")
+    ap.add_argument("--title", type=str, default="", help="Titre du post")
     ap.add_argument("--text", type=str, default="", help="Corps du post")
     ap.add_argument("--file", type=str, default="", help="Fichier texte contenant le post")
-    ap.add_argument("--voice", type=str, default=VOICE, help="reference_id (voix)")
-    ap.add_argument("--background", type=str, default="", help="Chemin du fond (défaut: clip aléatoire de assets/backgrounds/)")
-    ap.add_argument("--output", type=str, default="", help="Chemin de sortie (défaut: auto)")
+    ap.add_argument("--subreddit", type=str, default="AmItheAsshole")
+    ap.add_argument("--username", type=str, default="throwaway_account")
+    ap.add_argument("--upvotes", type=int, default=0, help="0 = aléatoire réaliste")
+    ap.add_argument("--comments", type=int, default=0, help="0 = aléatoire réaliste")
+    ap.add_argument("--voice", type=str, default=VOICE)
+    ap.add_argument("--background", type=str, default="", help="Fond (défaut: aléatoire)")
+    ap.add_argument("--output", type=str, default="", help="Sortie (défaut: auto)")
     args = ap.parse_args()
 
-    # 1. récupère le texte
-    if args.file:
-        text = Path(args.file).read_text(encoding="utf-8")
-    else:
-        text = args.text
-    if args.title:
-        t = args.title.strip()
-        text = f"{t} {text}" if t.endswith((".", "!", "?")) else f"{t}. {text}"
-    text = clean_text(text)
-    if not text:
-        print("❌ Aucun texte fourni (--text / --file / --title)", file=sys.stderr)
+    # 1. texte
+    body = Path(args.file).read_text(encoding="utf-8") if args.file else args.text
+    title = clean_text(args.title)
+    body = clean_text(body)
+    if not title and not body:
+        print("❌ Aucun texte fourni (--title / --text / --file)", file=sys.stderr)
         return 1
 
-    print(f"📝 Texte : {len(text)} caractères")
+    if title:
+        sep = " " if title.endswith((".", "!", "?")) else ". "
+        narration_text = f"{title}{sep}{body}".strip()
+    else:
+        narration_text = body
+    print(f"📝 Post : {len(narration_text)} caractères")
 
-    # 2. découpe en phrases
-    sentences = split_sentences(text)
-    print(f"✂️  {len(sentences)} phrase(s) détectée(s)")
-
-    # 3. TTS phrase par phrase
+    # 2. rendu du screenshot Reddit
+    upvotes = args.upvotes or random.randint(800, 48000)
+    comments = args.comments or random.randint(40, 2500)
+    print("🖼️  Rendu de la carte Reddit...")
+    screenshot_img = render_reddit_post(
+        title=title or "(untitled)", body=body,
+        subreddit=args.subreddit, username=args.username,
+        upvotes=upvotes, comments=comments,
+    )
     workdir = Path(tempfile.mkdtemp(prefix="engine_"))
-    segments: list[Path] = []
-    durations: list[float] = []
-    print("🎙️  Génération de la voix off (Fish Speech)...")
-    for i, sent in enumerate(sentences, 1):
-        print(f"   [{i}/{len(sentences)}] {sent[:60]}{'...' if len(sent) > 60 else ''}")
-        audio_bytes = tts(sent, voice=args.voice)
-        seg = workdir / f"seg_{i:03d}.wav"
-        seg.write_bytes(audio_bytes)
-        segments.append(seg)
-        durations.append(audio_duration(seg))
+    screenshot = workdir / "post.png"
+    screenshot_img.save(screenshot)
 
-    # 4. concatène l'audio
+    # 3. TTS (par morceaux sûrs, concaténés)
+    chunks = split_chunks(narration_text)
+    print(f"🎙️  Génération de la voix off ({len(chunks)} segment(s))...")
+    segments: list[Path] = []
+    for i, chunk in enumerate(chunks, 1):
+        print(f"   [{i}/{len(chunks)}] {chunk[:60]}{'...' if len(chunk) > 60 else ''}")
+        seg = workdir / f"seg_{i:03d}.wav"
+        seg.write_bytes(tts(chunk, voice=args.voice))
+        segments.append(seg)
+
     silence = workdir / "silence.wav"
     make_silence(silence, GAP_SECONDS)
     narration = workdir / "narration.wav"
     print("🔗  Concaténation de l'audio...")
     concat_audio(segments, silence, narration)
 
-    # 5. sous-titres
-    cues = []
-    t = 0.0
-    for i, dur in enumerate(durations):
-        start = t
-        end = t + dur
-        cues.append((start, end, sentences[i]))
-        t = end + GAP_SECONDS
-    ass = workdir / "captions.ass"
-    ass.write_text(build_ass(cues), encoding="utf-8")
-
-    # 6. assemble le MP4
+    # 4. assemblage
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     if not args.output:
-        slug = re.sub(r"[^a-z0-9]+", "-", sentences[0][:40].lower()).strip("-")
+        slug = re.sub(r"[^a-z0-9]+", "-", (title or body)[:40].lower()).strip("-") or "story"
         output = OUTPUT_DIR / f"reddit-story-{slug}.mp4"
     else:
         output = Path(args.output)
@@ -305,11 +253,10 @@ def main() -> int:
     narration_dur = audio_duration(narration)
     background = choose_background(args.background or None)
     print(f"   Fond utilisé : {background.name}")
-    assemble(background, narration, ass, output, narration_dur)
+    assemble(background, screenshot, narration, output, narration_dur)
 
-    total = sum(durations) + GAP_SECONDS * (len(durations) - 1)
     print(f"\n✅ MP4 généré : {output}")
-    print(f"   Durée audio : {total:.1f}s | {len(sentences)} phrases")
+    print(f"   Durée : {narration_dur:.1f}s | r/{args.subreddit} | {upvotes} votes")
     return 0
 
 
