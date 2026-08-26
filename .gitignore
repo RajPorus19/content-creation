@@ -11,5 +11,11 @@ authelia/db.sqlite3-*
 authelia/notifications.txt
 
 # Sources des apps (clonées depuis upstream, trackées dans leur propre repo git)
-brightbean-studio/
+# (ancré à la racine avec « / » pour ne pas ignorer patches/fish-speech/)
+/brightbean-studio/
+/fish-speech/
 
+
+# Python
+__pycache__/
+*.pyc

@@ -118,6 +118,43 @@ variables `PLATFORM_*` dans `.env` (qui priment sur l'admin, + restart requis).
 Redirect URI OAuth à déclarer dans Google Cloud (Client OAuth Web) :
 `https://brightbean.example.com/social-accounts/callback/youtube/`
 
+### Fish Speech — TTS / clonage vocal (S2 Pro)
+
+- **URL** : `https://fish.example.com` (sous-domaine — Gradio ne gère pas proprement le sous-chemin)
+- **Image** : `content-creation-fish-webui:cuda` (buildée depuis `fish-speech/docker/Dockerfile`, target `webui`, CUDA 12.9)
+- **Modèle** : S2 Pro quantifié **int8** dans `fish-speech/checkpoints/s2-pro-int8/` (~6.5 GB), généré depuis `s2-pro/` (~11 GB).
+- **⚠️ VRAM 16 GB (RTX 5080)** : S2 Pro bf16 demande ~24 GB → OOM. Résolu par 4 optimisations (voir `patches/fish-speech/`) :
+  1. **Quantification int8** du modèle (9.1 → 5.1 GB), via le script officiel `tools/llama/quantize.py` + dossier nommé `-int8`.
+  2. `init_model` : suppression du cast `dtype=bf16` qui annulait l'int8.
+  3. Cache KV plafonné à 16384 tokens (au lieu de 32768, ~2.4 GB économisés).
+  4. Codec bf16 + `causal_mask` à `block_size` au lieu de `32768²` (bug fish-speech : 3.2 GB de booléens inutiles).
+- **Healthcheck** : l'image teste `/health` (404 chez Gradio) → overridé dans le compose pour tester `/`. Sans ça Traefik filtre le conteneur « unhealthy » et ne crée pas le routeur.
+
+Builder l'image :
+
+```bash
+cd fish-speech
+docker build -f docker/Dockerfile --target webui \
+  --build-arg BACKEND=cuda --build-arg CUDA_VER=12.9.0 \
+  --build-arg UV_EXTRA=cu129 --build-arg UV_VERSION=0.8.15 \
+  -t content-creation-fish-webui:cuda .
+```
+
+Télécharger le modèle puis le quantifier en int8 :
+
+```bash
+hf download fishaudio/s2-pro --local-dir fish-speech/checkpoints/s2-pro
+
+# Quantification int8 (produit model.pth ~5 GB) :
+docker run --rm \
+  -v "$PWD/fish-speech/checkpoints:/app/checkpoints" -w /app \
+  --entrypoint uv content-creation-fish-webui:cuda \
+  run python tools/llama/quantize.py --checkpoint-path checkpoints/s2-pro --mode int8 --timestamp s2pro
+
+# Puis assembler un dossier propre s2-pro-int8/ (model.pth + config + tokenizer + codec.pth),
+# sans les safetensors bf16 copiés par le script.
+```
+
 ## Utilisateurs
 
 ```bash

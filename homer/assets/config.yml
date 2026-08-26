@@ -28,3 +28,8 @@ services:
         icon: "fas fa-share-alt"
         url: "https://brightbean.example.com"
         target: "_blank"
+      - name: "Fish Speech"
+        subtitle: "TTS / clonage vocal (S2 Pro)"
+        icon: "fas fa-microphone"
+        url: "https://fish.example.com"
+        target: "_blank"

@@ -183,6 +183,54 @@ services:
     networks:
       - proxy
 
+  # ===========================================================================
+  #  Fish Speech — TTS / clonage vocal (Gradio WebUI, GPU NVIDIA)
+  #  Exposé sur https://fish.example.com (sous-domaine 1 niveau, SSL gratuit)
+  #  Protégé par Authelia (id + mdp + 2FA) via authelia-auth@file.
+  #  ⚠️ Gradio ne gère pas proprement le sous-chemin (/fish) → sous-domaine.
+  #  ⚠️ S2 Pro ≈ 24 GB VRAM recommandé ; RTX 5080 = 16 GB → OOM possible sur
+  #     de longues générations (le modèle charge en bf16). Voir README.
+  # ===========================================================================
+  fish-webui:
+    image: content-creation-fish-webui:cuda
+    container_name: cc-fish-webui
+    restart: unless-stopped
+    # Le HEALTHCHECK de l'image teste /health, mais la WebUI Gradio ne l'expose
+    # pas (404) → conteneur "unhealthy" et Traefik le filtre (router absent).
+    # On teste la racine / qui répond 200.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    environment:
+      COMPILE: "0"   # pas de torch.compile (économise de la VRAM)
+      LLAMA_CHECKPOINT_PATH: "checkpoints/s2-pro-int8"   # modèle quantifié int8 (16 GB VRAM)
+      DECODER_CHECKPOINT_PATH: "checkpoints/s2-pro-int8/codec.pth"
+    volumes:
+      - ./fish-speech/checkpoints:/app/checkpoints
+      - ./fish-speech/references:/app/references
+      - ./patches/fish-speech/inference.py:/app/fish_speech/models/text2semantic/inference.py:ro
+      - ./patches/fish-speech/dac_inference.py:/app/fish_speech/models/dac/inference.py:ro
+      - ./patches/fish-speech/modded_dac.py:/app/fish_speech/models/dac/modded_dac.py:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fish.rule=Host(`fish.example.com`)"
+      - "traefik.http.routers.fish.entrypoints=websecure"
+      - "traefik.http.routers.fish.tls=true"
+      - "traefik.http.routers.fish.middlewares=authelia-auth@file,security-headers@file"
+      - "traefik.http.services.fish.loadbalancer.server.port=7860"
+    networks:
+      - proxy
+
 #  ---------------------------------------------------------------------------
 #  EXEMPLE : ajouter une app derrière un chemin (/whoami)
 #  Décommente ce bloc et adapte. ⚠️ L'app DOIT accepter d'être servie sous un
