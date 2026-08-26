@@ -26,15 +26,15 @@ access_control:
   default_policy: two_factor          # id + mdp + 2FA sur TOUT
   rules:
     - domain:
-        - "auth.content-creation.example.com"  # <-- CHANGE-MOI (auth.DOMAIN)
+        - "auth.example.com"  # <-- CHANGE-MOI (auth.DOMAIN)
       policy: bypass                  # le portail de login doit rester accessible
 
 # --- Session -----------------------------------------------------------------
 session:
   # secret fourni par l'env var AUTHELIA_SESSION_SECRET
   cookies:
-    - domain: "content-creation.example.com"                      # <-- CHANGE-MOI (DOMAIN)
-      authelia_url: "https://auth.content-creation.example.com"   # <-- CHANGE-MOI
+    - domain: "example.com"                      # <-- cookie valable sur tout *.example.com
+      authelia_url: "https://auth.example.com"   # <-- CHANGE-MOI
       default_redirection_url: "https://content-creation.example.com"  # <-- CHANGE-MOI
       expiration: "1h"
       inactivity: "5m"

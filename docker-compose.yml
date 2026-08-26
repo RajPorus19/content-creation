@@ -50,7 +50,7 @@ services:
     labels:
       # Portail de connexion Authelia -> https://auth.${DOMAIN}
       - "traefik.enable=true"
-      - "traefik.http.routers.authelia.rule=Host(`auth.${DOMAIN}`)"
+      - "traefik.http.routers.authelia.rule=Host(`auth.example.com`)"
       - "traefik.http.routers.authelia.entrypoints=websecure"
       - "traefik.http.routers.authelia.tls=true"
       - "traefik.http.routers.authelia.middlewares=security-headers@file"
