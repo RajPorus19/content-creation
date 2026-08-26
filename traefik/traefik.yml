@@ -1,0 +1,56 @@
+# =============================================================================
+#  Traefik — configuration STATIQUE
+#  (entrypoints, providers, dashboard, resolvers de certificats)
+#  Les routes/middlewares dynamiques vivent dans ./dynamic/ et les labels Docker.
+# =============================================================================
+
+# --- Dashboard / API ---------------------------------------------------------
+api:
+  dashboard: true
+  # Dashboard exposé en clair sur :8081 (host). NON protégé ici — voir README
+  # pour le mettre derrière Authelia, ou retire `insecure: true` en prod.
+  insecure: true
+
+# --- Points d'entrée ----------------------------------------------------------
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+
+# --- Providers ---------------------------------------------------------------
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false   # seuls les conteneurs avec traefik.enable=true sont routés
+    network: proxy
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+# --- Certificats -------------------------------------------------------------
+# Par défaut : certificat AUTO-SIGNÉ généré par Traefik (aucun resolver) →
+# idéal pour du 100% local, mais le navigateur affichera un avertissement
+# (à accepter une fois).
+#
+# Pour un VRAI certificat Let's Encrypt (domaine public + port 80 libre, ou
+# challenge DNS), décommente le bloc ci-dessous puis ajoute
+# `tls.certresolver=letsencrypt` sur chaque routeur.
+#
+# certificatesResolvers:
+#   letsencrypt:
+#     acme:
+#       email: ton@email.com            # <-- CHANGE-MOI
+#       storage: /etc/traefik/certs/acme.json
+#       httpChallenge:
+#         entryPoint: web
+#       # challenge DNS (recommandé si le port 80 n'est pas exposé) :
+#       # dnsChallenge:
+#       #   provider: cloudflare
+#       #   delayBeforeCheck: 0

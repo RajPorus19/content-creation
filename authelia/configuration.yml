@@ -1,0 +1,57 @@
+# =============================================================================
+#  Authelia — configuration principale
+#  Les secrets (session, storage, jwt) sont fournis via des variables
+#  d'environnement AUTHELIA_* définies dans docker-compose.yml → ne PAS les
+#  mettre ici en clair.
+#  ⚠️  Change "content.example.com" par ton vrai domaine (3 occurrences).
+# =============================================================================
+
+server:
+  address: "tcp://0.0.0.0:9091"
+
+log:
+  level: info
+
+theme: dark
+
+# --- Backend d'authentification : fichier local ------------------------------
+authentication_backend:
+  file:
+    path: /config/users_database.yml
+    password:
+      algorithm: argon2id
+
+# --- Contrôle d'accès --------------------------------------------------------
+access_control:
+  default_policy: two_factor          # id + mdp + 2FA sur TOUT
+  rules:
+    - domain:
+        - "auth.content.example.com"  # <-- CHANGE-MOI (auth.DOMAIN)
+      policy: bypass                  # le portail de login doit rester accessible
+
+# --- Session -----------------------------------------------------------------
+session:
+  # secret fourni par l'env var AUTHELIA_SESSION_SECRET
+  cookies:
+    - domain: "content.example.com"                      # <-- CHANGE-MOI (DOMAIN)
+      authelia_url: "https://auth.content.example.com"   # <-- CHANGE-MOI
+      default_redirection_url: "https://content.example.com"  # <-- CHANGE-MOI
+      expiration: "1h"
+      inactivity: "5m"
+      remember_me: "1M"
+
+# --- Identité / reset password ----------------------------------------------
+identity_validation:
+  reset_password:
+    # jwt_secret fourni par l'env var AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET
+
+# --- Stockage (SQLite local, suffisant pour ce setup) ------------------------
+storage:
+  local:
+    path: /config/db.sqlite3
+  # encryption_key fourni par l'env var AUTHELIA_STORAGE_ENCRYPTION_KEY
+
+# --- Notifications (fichier local, pour logs) --------------------------------
+notifier:
+  filesystem:
+    filename: /config/notifications.txt

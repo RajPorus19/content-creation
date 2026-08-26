@@ -1,0 +1,85 @@
+# =============================================================================
+#  content-creation — Reverse proxy + authentification (Traefik + Authelia)
+#  Stack 100% locale. Aucun remote git, aucun push.
+# =============================================================================
+#
+#  ⚠️  PORTS HOST : 80 / 81 / 443 / 8080 sont déjà pris par ton homelab
+#     (nginx-proxy-manager + qBittorrent + autre). On expose donc sur :
+#        82   -> HTTP   (traefik interne :80)
+#        444  -> HTTPS  (traefik interne :443)
+#        8081 -> Dashboard Traefik (interne :8080)
+#     Si tu libères 80/443 un jour, édite juste la section "ports".
+#
+#  Lancement :
+#     cp .env.example .env    # si pas déjà fait — remplis DOMAIN + secrets
+#     docker compose up -d
+
+services:
+  traefik:
+    image: traefik:v3.7
+    container_name: cc-traefik
+    restart: unless-stopped
+    # Traefik v3 tourne en non-root par défaut (uid 65532) → impossible de lire
+    # /var/run/docker.sock (root:docker). On le fait tourner en root pour la
+    # découverte Docker. Alternative plus stricte : group_add avec le gid docker.
+    user: "0:0"
+    ports:
+      - "82:80"      # HTTP  -> "80:80" si port libre
+      - "444:443"    # HTTPS -> "443:443" si port libre
+      - "8081:8080"  # Dashboard / API (NON protégé ici — voir README)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - ./traefik/certs:/etc/traefik/certs
+    networks:
+      - proxy
+
+  authelia:
+    image: authelia/authelia:4.39.20
+    container_name: cc-authelia
+    restart: unless-stopped
+    # uid/gid 1000 = ton utilisateur (USER) → droit d'écrire db.sqlite3 dans ./authelia
+    user: "1000:1000"
+    environment:
+      # Secrets injectés depuis .env (variables AUTHELIA_*, voir .env.example)
+      AUTHELIA_SESSION_SECRET: ${AUTHELIA_SESSION_SECRET}
+      AUTHELIA_STORAGE_ENCRYPTION_KEY: ${AUTHELIA_STORAGE_ENCRYPTION_KEY}
+      AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET: ${AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET}
+    volumes:
+      - ./authelia:/config
+    expose:
+      - "9091"
+    labels:
+      # Portail de connexion Authelia -> https://auth.${DOMAIN}
+      - "traefik.enable=true"
+      - "traefik.http.routers.authelia.rule=Host(`auth.${DOMAIN}`)"
+      - "traefik.http.routers.authelia.entrypoints=websecure"
+      - "traefik.http.routers.authelia.tls=true"
+      - "traefik.http.routers.authelia.middlewares=security-headers@file"
+      - "traefik.http.services.authelia.loadbalancer.server.port=9091"
+    networks:
+      - proxy
+
+#  ---------------------------------------------------------------------------
+#  EXEMPLE : ajouter une app derrière un chemin (/whoami)
+#  Décommente ce bloc et adapte. ⚠️ L'app DOIT accepter d'être servie sous un
+#  sous-chemin (base_url) — sinon utilise un sous-domaine (Host(`app.DOMAIN`)).
+#  ---------------------------------------------------------------------------
+#  whoami:
+#    image: traefik/whoami
+#    labels:
+#      - "traefik.enable=true"
+#      - "traefik.http.routers.whoami.rule=Host(`${DOMAIN}`) && PathPrefix(`/whoami`)"
+#      - "traefik.http.routers.whoami.entrypoints=websecure"
+#      - "traefik.http.routers.whoami.tls=true"
+#      - "traefik.http.middlewares.whoami-strip.stripprefix.prefixes=/whoami"
+#      - "traefik.http.routers.whoami.middlewares=authelia-auth@file,security-headers@file,whoami-strip"
+#      - "traefik.http.services.whoami.loadbalancer.server.port=80"
+#    networks:
+#      - proxy
+
+networks:
+  proxy:
+    name: proxy
+    # Réseau dédié. Toutes les futures apps doivent s'y attacher (networks: - proxy).

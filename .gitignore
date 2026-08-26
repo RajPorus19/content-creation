@@ -1,0 +1,11 @@
+# Secrets & données locales — ne jamais committer
+.env
+
+# Certificats ACME (contient des clés privées)
+traefik/certs/*
+!traefik/certs/.gitkeep
+
+# Données runtime Authelia
+authelia/db.sqlite3
+authelia/db.sqlite3-*
+authelia/notifications.txt

@@ -1,0 +1,29 @@
+# =============================================================================
+#  Traefik — configuration DYNAMIQUE : middlewares réutilisables
+#  Référencés depuis les labels Docker via `<nom>@file`.
+# =============================================================================
+
+http:
+  middlewares:
+    # Forward-auth -> Authelia (id + mot de passe + 2FA TOTP)
+    authelia-auth:
+      forwardAuth:
+        address: "http://authelia:9091/api/authz/forward-auth"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - "Remote-User"
+          - "Remote-Groups"
+          - "Remote-Email"
+          - "Remote-Name"
+
+    # En-têtes de sécurité communs (optionnel mais recommandé)
+    security-headers:
+      headers:
+        frameDeny: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        referrerPolicy: "same-origin"
+        # HSTS à activer seulement en prod avec un vrai certificat :
+        # stsSeconds: 31536000
+        # stsIncludeSubdomains: true
+        # stsPreload: true
