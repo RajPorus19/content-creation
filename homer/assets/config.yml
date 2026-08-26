@@ -16,7 +16,7 @@ theme: default
 links:
   - name: "Compte Authelia (mot de passe / 2FA)"
     icon: "fas fa-shield-alt"
-    url: "https://content-creation.example.com/auth"
+    url: "https://auth.example.com"
     target: "_blank"
 
 services:
