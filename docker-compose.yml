@@ -214,6 +214,7 @@ services:
       - ./patches/fish-speech/inference.py:/app/fish_speech/models/text2semantic/inference.py:ro
       - ./patches/fish-speech/dac_inference.py:/app/fish_speech/models/dac/inference.py:ro
       - ./patches/fish-speech/modded_dac.py:/app/fish_speech/models/dac/modded_dac.py:ro
+      - ./patches/fish-speech/vq_manager.py:/app/fish_speech/inference_engine/vq_manager.py:ro
     deploy:
       resources:
         reservations:
@@ -228,6 +229,48 @@ services:
       - "traefik.http.routers.fish.tls=true"
       - "traefik.http.routers.fish.middlewares=authelia-auth@file,security-headers@file"
       - "traefik.http.services.fish.loadbalancer.server.port=7860"
+    networks:
+      - proxy
+
+  # ===========================================================================
+  #  Fish Speech — API server (mode serveur, OpenAI-like) pour le moteur de
+  #  génération de vidéos (engine/). Port 8080 interne, mappé sur
+  #  127.0.0.1:8082 (localhost uniquement). ⚠️ NON exposé publiquement (aucun
+  #  label Traefik) : l'API TTS est brute/sans auth, réservée au moteur local.
+  #  ⚠️ Mutuellement exclusif avec fish-webui (le modèle charge ~15 GB de VRAM)
+  #  → on fait tourner L'UN ou L'AUTRE, jamais les deux en même temps.
+  # ===========================================================================
+  fish-server:
+    image: content-creation-fish-server:cuda
+    container_name: cc-fish-server
+    restart: unless-stopped
+    # L'image expose déjà /v1/health (contrairement à la WebUI Gradio /health)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    environment:
+      COMPILE: "0"   # pas de torch.compile (économise de la VRAM)
+      LLAMA_CHECKPOINT_PATH: "checkpoints/s2-pro-int8"   # modèle quantifié int8 (16 GB VRAM)
+      DECODER_CHECKPOINT_PATH: "checkpoints/s2-pro-int8/codec.pth"
+    ports:
+      - "127.0.0.1:8082:8080"   # bind localhost only (jamais exposé sur internet)
+    volumes:
+      - ./fish-speech/checkpoints:/app/checkpoints
+      - ./fish-speech/references:/app/references
+      - ./patches/fish-speech/inference.py:/app/fish_speech/models/text2semantic/inference.py:ro
+      - ./patches/fish-speech/dac_inference.py:/app/fish_speech/models/dac/inference.py:ro
+      - ./patches/fish-speech/modded_dac.py:/app/fish_speech/models/dac/modded_dac.py:ro
+      - ./patches/fish-speech/vq_manager.py:/app/fish_speech/inference_engine/vq_manager.py:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     networks:
       - proxy
 

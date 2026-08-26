@@ -19,3 +19,6 @@ authelia/notifications.txt
 # Python
 __pycache__/
 *.pyc
+
+# Sorties du moteur (MP4 générés)
+/engine/output/
