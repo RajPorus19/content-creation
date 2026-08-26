@@ -3,15 +3,14 @@
 #  Stack 100% locale. Aucun remote git, aucun push.
 # =============================================================================
 #
-#  ⚠️  PORTS HOST : 80 / 81 / 443 / 8080 sont déjà pris par ton homelab
-#     (nginx-proxy-manager + qBittorrent + autre). On expose donc sur :
-#        82   -> HTTP   (traefik interne :80)
-#        444  -> HTTPS  (traefik interne :443)
-#        8081 -> Dashboard Traefik (interne :8080)
-#     Si tu libères 80/443 un jour, édite juste la section "ports".
+#  🌐 Exposition : via tunnel Cloudflare (cloudflared), PAS de port 80/443
+#     exposé sur l'hôte. Dans le dashboard Cloudflare (Zero Trust), pointe
+#     chaque hostname vers le service :  https://traefik:443
+#     (et dans TLS → coche "No TLS Verify", le cert Traefik est auto-signé).
+#     Seul le dashboard Traefik est mappé en local sur :8081 (accès admin).
 #
 #  Lancement :
-#     cp .env.example .env    # si pas déjà fait — remplis DOMAIN + secrets
+#     cp .env.example .env    # remplis DOMAIN + secrets + CLOUDFLARE_TUNNEL_TOKEN
 #     docker compose up -d
 
 services:
@@ -24,9 +23,7 @@ services:
     # découverte Docker. Alternative plus stricte : group_add avec le gid docker.
     user: "0:0"
     ports:
-      - "82:80"      # HTTP  -> "80:80" si port libre
-      - "444:443"    # HTTPS -> "443:443" si port libre
-      - "8081:8080"  # Dashboard / API (NON protégé ici — voir README)
+      - "8081:8080"  # Dashboard / API local (NON protégé ici — voir README)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
@@ -58,6 +55,18 @@ services:
       - "traefik.http.routers.authelia.tls=true"
       - "traefik.http.routers.authelia.middlewares=security-headers@file"
       - "traefik.http.services.authelia.loadbalancer.server.port=9091"
+    networks:
+      - proxy
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cc-cloudflared
+    restart: unless-stopped
+    environment:
+      # Token du tunnel (depuis .env). Le routing hostname→service se configure
+      # côté dashboard Cloudflare, PAS ici.
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate run
     networks:
       - proxy
 

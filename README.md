@@ -1,34 +1,38 @@
 # content-creation
 
-Stack **100% locale** (aucun push) de reverse-proxy + authentification forte.
+Stack **100% locale** (aucun push) de reverse-proxy + authentification forte,
+exposée publiquement via un **tunnel Cloudflare**.
 
-| Service  | Rôle                                      |
-|----------|-------------------------------------------|
-| Traefik  | Reverse proxy, routage par chemin `/app`  |
-| Authelia | Authentification : **id + mot de passe + 2FA (TOTP)** |
+| Service     | Rôle                                             |
+|-------------|--------------------------------------------------|
+| Traefik     | Reverse proxy, routage par chemin `/app`          |
+| Authelia    | Authentification : **id + mot de passe + 2FA (TOTP)** |
+| cloudflared | Tunnel Cloudflare (sortie, aucun port ouvert)     |
 
 ## Architecture
 
 ```
-Navigateur ──HTTPS──▶ Traefik ──(forward-auth)──▶ Authelia ──▶ OK ?
-                        │                                 │
-                        │ app:80                          │ non → redirect portail login
-                        ▼
-                    https://DOMAIN/nomdelapp
+Navigateur ──HTTPS──▶ Cloudflare edge ──▶ cloudflared ──▶ traefik:443
+                                                              │
+                                              forward-auth ──▶ Authelia (2FA)
+                                                              │
+                                                        app:80 (chemin /app)
 ```
 
+- Le trafic arrive **par le tunnel** (cloudflared) sur `traefik:443` en interne,
+  jamais via un port 80/443 exposé sur l'hôte.
 - Traefik route par **chemin** (`/nomdelapp`) via `PathPrefix` + `StripPrefix`.
-- Chaque app est **derrière le middleware `authelia-auth@file`** → impossible d'y
-  accéder sans être connecté (id + mdp + code 2FA).
-- Le portail de connexion est sur `https://auth.DOMAIN` (lui-même *bypass*,
-  sinon on ne pourrait pas se logger).
+- Chaque app est derrière le middleware `authelia-auth@file` → impossible d'y
+  accéder sans id + mdp + code 2FA.
+- Le portail de connexion est sur `https://auth.DOMAIN` (lui-même *bypass*).
 
 ## Démarrage
 
 ```bash
-# 1. Variables d'env (déjà fait si .env existe — il est gitignoré)
+# 1. Variables d'env
 cp .env.example .env
-#    → édite DOMAIN + les 3 secrets (openssl rand -hex 32)
+#    → édite DOMAIN + les 3 secrets Authelia (openssl rand -hex 32)
+#      + CLOUDFLARE_TUNNEL_TOKEN (token du tunnel)
 
 # 2. Change le domaine dans authelia/configuration.yml (4 occurrences)
 
@@ -37,17 +41,24 @@ docker compose up -d
 docker compose logs -f   # surveille le démarrage
 ```
 
-⚠️ **Ports host** : `80`/`443`/`8080` (et `81`) sont pris par le homelab. Ce stack expose
-`82` (http), `444` (https), `8081` (dashboard). À changer dans `docker-compose.yml`.
+## Configuration côté Cloudflare
+
+Dans le dashboard **Cloudflare Zero Trust → Networks → Tunnels**, pour chaque
+hostname public que tu veux exposer :
+
+| Champ           | Valeur                        |
+|-----------------|-------------------------------|
+| **Service**     | `https://traefik:443`         |
+| **TLS**         | « No TLS Verify » (cert auto-signé de Traefik) |
+
+> Le *routing* (quel hostname → quel service) se fait **côté dashboard**, pas
+> dans ce repo. Le token seul (`.env`) authentifie le tunnel.
 
 ## Certificats
 
-- **Par défaut** : certificat **auto-signé** Traefik → 100% local, mais le
-  navigateur affiche un avertissement à accepter.
-- **Vrai certificat** (Let's Encrypt) : décommente le bloc `certificatesResolvers`
-  dans `traefik/traefik.yml`, mets ton email, puis ajoute
-  `tls.certresolver=letsencrypt` sur chaque routeur. Nécessite un domaine public
-  + port 80 libre (ou un challenge DNS).
+- **À l'origine** (Traefik) : cert **auto-signé** → d'où le « No TLS Verify »
+  côté tunnel. Rien à exposer ni à renouveler.
+- **En bordure** : Cloudflare gère le TLS public automatiquement.
 
 ## Ajouter une app derrière un chemin
 
@@ -61,8 +72,8 @@ labels:
 ```
 
 **⚠️ Limite du routage par chemin** : l'app doit savoir qu'elle est servie sous
-un sous-chemin (config `base_url` / `root_url` selon l'app). Certaines apps ne le
-supportent pas → dans ce cas, passe en sous-domaine : `Host(`app.${DOMAIN}`)`.
+un sous-chemin (config `base_url` / `root_url` selon l'app). Sinon, passe en
+sous-domaine : `Host(`app.${DOMAIN}`)`.
 
 ## Utilisateurs
 
@@ -80,6 +91,6 @@ connexion.
 
 ## À noter
 
-- **Dashboard Traefik** (`:8081`) est en clair pour l'instant — à protéger ou
-  retirer (`insecure: true` dans `traefik/traefik.yml`).
+- **Dashboard Traefik** (`:8081`) est en local seulement et en clair — à
+  protéger ou retirer (`insecure: true` dans `traefik/traefik.yml`).
 - Le réseau `proxy` est partagé : toutes les futures apps doivent s'y attacher.
