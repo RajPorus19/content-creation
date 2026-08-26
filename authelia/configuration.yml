@@ -3,11 +3,12 @@
 #  Les secrets (session, storage, jwt) sont fournis via des variables
 #  d'environnement AUTHELIA_* définies dans docker-compose.yml → ne PAS les
 #  mettre ici en clair.
-#  ⚠️  Change "content-creation.example.com" par ton vrai domaine (3 occurrences).
+#  Login servi sous https://content-creation.example.com/auth (sous-chemin,
+#  pas de sous-domaine → pas d'ACM payant).
 # =============================================================================
 
 server:
-  address: "tcp://0.0.0.0:9091"
+  address: "tcp://0.0.0.0:9091/auth"   # /auth = sous-chemin du portail
 
 log:
   level: info
@@ -23,19 +24,15 @@ authentication_backend:
 
 # --- Contrôle d'accès --------------------------------------------------------
 access_control:
-  default_policy: two_factor          # id + mdp + 2FA sur TOUT
-  rules:
-    - domain:
-        - "auth.example.com"  # <-- CHANGE-MOI (auth.DOMAIN)
-      policy: bypass                  # le portail de login doit rester accessible
+  default_policy: two_factor          # id + mdp + 2FA sur TOUT (les apps)
 
 # --- Session -----------------------------------------------------------------
 session:
   # secret fourni par l'env var AUTHELIA_SESSION_SECRET
   cookies:
-    - domain: "example.com"                      # <-- cookie valable sur tout *.example.com
-      authelia_url: "https://auth.example.com"   # <-- CHANGE-MOI
-      default_redirection_url: "https://content-creation.example.com"  # <-- CHANGE-MOI
+    - domain: "content-creation.example.com"
+      authelia_url: "https://content-creation.example.com/auth"
+      default_redirection_url: "https://content-creation.example.com"
       expiration: "1h"
       inactivity: "5m"
       remember_me: "1M"

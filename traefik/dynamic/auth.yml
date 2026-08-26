@@ -8,7 +8,7 @@ http:
     # Forward-auth -> Authelia (id + mot de passe + 2FA TOTP)
     authelia-auth:
       forwardAuth:
-        address: "http://authelia:9091/api/authz/forward-auth"
+        address: "http://authelia:9091/auth/api/authz/forward-auth"
         trustForwardHeader: true
         authResponseHeaders:
           - "Remote-User"
