@@ -102,7 +102,21 @@ cd brightbean-studio && git pull && cd ..
 docker compose up -d --build brightbean-migrate brightbean-app brightbean-worker
 ```
 
+### Connexion des plateformes (ex. YouTube)
 
+Les credentials des réseaux sociaux se règlent soit via le **Django admin**
+(`/admin/` → Credentials → Platform credentials, superuser only), soit via les
+variables `PLATFORM_*` dans `.env` (qui priment sur l'admin, + restart requis).
+
+**YouTube / Google Business Profile** (mêmes credentials Google) :
+
+| Variable | Valeur |
+|---|---|
+| `PLATFORM_GOOGLE_CLIENT_ID` | Client ID Google Cloud |
+| `PLATFORM_GOOGLE_CLIENT_SECRET` | Client Secret Google Cloud |
+
+Redirect URI OAuth à déclarer dans Google Cloud (Client OAuth Web) :
+`https://brightbean.example.com/social-accounts/callback/youtube/`
 
 ## Utilisateurs
 
