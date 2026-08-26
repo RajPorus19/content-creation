@@ -75,6 +75,35 @@ labels:
 un sous-chemin (config `base_url` / `root_url` selon l'app). Sinon, passe en
 sous-domaine : `Host(`app.${DOMAIN}`)`.
 
+## Apps déployées
+
+### BrightBean Studio — gestion des réseaux sociaux
+
+- **URL** : `https://brightbean.example.com` (sous-domaine 1 niveau → SSL gratuit)
+- **Pourquoi un sous-domaine** : Django ne supporte pas proprement le sous-chemin
+  `/app`, on sert donc à la racine du domaine (comme le fait son propre
+  `docker-compose.prod.yml` avec Caddy).
+- **Stack interne** : Django + PostgreSQL 16 + worker (`process_tasks`) + migrate.
+- **Services Compose** : `brightbean-postgres`, `brightbean-migrate`,
+  `brightbean-app`, `brightbean-worker`.
+- **Secrets** (dans `.env`) : `BRIGHTBEAN_SECRET_KEY`, `BRIGHTBEAN_ENCRYPTION_KEY_SALT`,
+  `BRIGHTBEAN_POSTGRES_PASSWORD`.
+
+Créer le compte admin :
+
+```bash
+docker compose exec brightbean-app python manage.py createsuperuser
+```
+
+Mettre à jour l'app (pull + rebuild) :
+
+```bash
+cd brightbean-studio && git pull && cd ..
+docker compose up -d --build brightbean-migrate brightbean-app brightbean-worker
+```
+
+
+
 ## Utilisateurs
 
 ```bash

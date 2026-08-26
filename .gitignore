@@ -9,3 +9,7 @@ traefik/certs/*
 authelia/db.sqlite3
 authelia/db.sqlite3-*
 authelia/notifications.txt
+
+# Sources des apps (clonées depuis upstream, trackées dans leur propre repo git)
+brightbean-studio/
+

@@ -23,12 +23,8 @@ services:
   - name: "Applications"
     icon: "fas fa-th-large"
     items:
-      # Exemple d'app (décommente et adapte quand tu m'ajoutes des apps) :
-      # - name: "Mon App"
-      #   subtitle: "Petite description"
-      #   icon: "fas fa-cube"
-      #   url: "https://content-creation.example.com/monapp"
-      #   target: "_blank"
-      - name: "Bientôt…"
-        subtitle: "Tes apps apparaîtront ici au fur et à mesure"
-        icon: "fas fa-spinner"
+      - name: "BrightBean Studio"
+        subtitle: "Gestion des réseaux sociaux"
+        icon: "fas fa-share-alt"
+        url: "https://brightbean.example.com"
+        target: "_blank"

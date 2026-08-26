@@ -86,6 +86,103 @@ services:
     networks:
       - proxy
 
+  # ===========================================================================
+  #  BrightBean Studio — gestion de contenus réseaux sociaux (Django + PostgreSQL)
+  #  Exposé sur https://brightbean.example.com (sous-domaine 1 niveau, SSL gratuit)
+  #  Protégé par Authelia (id + mdp + 2FA) via authelia-auth@file.
+  #  ⚠️ Django ne supporte pas proprement le sous-chemin (/app) → sous-domaine.
+  # ===========================================================================
+  brightbean-postgres:
+    image: postgres:16-alpine
+    container_name: cc-brightbean-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: brightbean
+      POSTGRES_USER: brightbean
+      POSTGRES_PASSWORD: ${BRIGHTBEAN_POSTGRES_PASSWORD}
+    volumes:
+      - brightbean_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brightbean"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - proxy
+
+  brightbean-migrate:
+    build: ./brightbean-studio
+    container_name: cc-brightbean-migrate
+    command: python manage.py migrate --noinput
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      SECRET_KEY: ${BRIGHTBEAN_SECRET_KEY}
+      ENCRYPTION_KEY_SALT: ${BRIGHTBEAN_ENCRYPTION_KEY_SALT}
+      DEBUG: "false"
+      ALLOWED_HOSTS: brightbean.example.com
+      APP_URL: https://brightbean.example.com
+      DATABASE_URL: postgres://brightbean:${BRIGHTBEAN_POSTGRES_PASSWORD}@brightbean-postgres:5432/brightbean
+      STORAGE_BACKEND: local
+      MEDIA_ROOT: /app/media
+    depends_on:
+      brightbean-postgres:
+        condition: service_healthy
+    networks:
+      - proxy
+
+  brightbean-app:
+    build: ./brightbean-studio
+    container_name: cc-brightbean-app
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --threads 2
+    volumes:
+      - brightbean_media_data:/app/media
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      SECRET_KEY: ${BRIGHTBEAN_SECRET_KEY}
+      ENCRYPTION_KEY_SALT: ${BRIGHTBEAN_ENCRYPTION_KEY_SALT}
+      DEBUG: "false"
+      ALLOWED_HOSTS: brightbean.example.com
+      APP_URL: https://brightbean.example.com
+      DATABASE_URL: postgres://brightbean:${BRIGHTBEAN_POSTGRES_PASSWORD}@brightbean-postgres:5432/brightbean
+      STORAGE_BACKEND: local
+      MEDIA_ROOT: /app/media
+    depends_on:
+      brightbean-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.brightbean.rule=Host(`brightbean.example.com`)"
+      - "traefik.http.routers.brightbean.entrypoints=websecure"
+      - "traefik.http.routers.brightbean.tls=true"
+      - "traefik.http.routers.brightbean.middlewares=authelia-auth@file,security-headers@file"
+      - "traefik.http.services.brightbean.loadbalancer.server.port=8000"
+    networks:
+      - proxy
+
+  brightbean-worker:
+    build: ./brightbean-studio
+    container_name: cc-brightbean-worker
+    command: python manage.py process_tasks
+    volumes:
+      - brightbean_media_data:/app/media
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      SECRET_KEY: ${BRIGHTBEAN_SECRET_KEY}
+      ENCRYPTION_KEY_SALT: ${BRIGHTBEAN_ENCRYPTION_KEY_SALT}
+      DEBUG: "false"
+      ALLOWED_HOSTS: brightbean.example.com
+      APP_URL: https://brightbean.example.com
+      DATABASE_URL: postgres://brightbean:${BRIGHTBEAN_POSTGRES_PASSWORD}@brightbean-postgres:5432/brightbean
+      STORAGE_BACKEND: local
+      MEDIA_ROOT: /app/media
+    depends_on:
+      brightbean-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - proxy
+
 #  ---------------------------------------------------------------------------
 #  EXEMPLE : ajouter une app derrière un chemin (/whoami)
 #  Décommente ce bloc et adapte. ⚠️ L'app DOIT accepter d'être servie sous un
@@ -108,3 +205,7 @@ networks:
   proxy:
     name: proxy
     # Réseau dédié. Toutes les futures apps doivent s'y attacher (networks: - proxy).
+
+volumes:
+  brightbean_postgres_data:
+  brightbean_media_data:
