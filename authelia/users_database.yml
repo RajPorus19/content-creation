@@ -1,13 +1,23 @@
-# =============================================================================
-#  Authelia — comptes utilisateurs
-#  Mot de passe = hash argon2id. Génère via : ./scripts/add-user.sh <pseudo> <mdp>
-# =============================================================================
-
 users:
-  utilisateur:
-    disabled: false
-    displayname: "Utilisateur"
-    password: "[REDACTED]"
-    email: utilisateur@example.com
-    groups:
-      - admins
+    utilisateur:
+        password: [REDACTED]
+        displayname: Utilisateur
+        email: utilisateur@example.com
+        groups:
+            - admins
+        given_name: ""
+        middle_name: ""
+        family_name: ""
+        nickname: ""
+        gender: ""
+        birthdate: ""
+        website: ""
+        profile: ""
+        picture: ""
+        zoneinfo: ""
+        locale: ""
+        phone_number: ""
+        phone_extension: ""
+        disabled: false
+        address: null
+        extra: {}
