@@ -36,8 +36,8 @@ session:
     - domain: "example.com"             # couvre auth.example.com + content-creation.example.com
       authelia_url: "https://auth.example.com"
       default_redirection_url: "https://content-creation.example.com"
-      expiration: "1h"
-      inactivity: "5m"
+      expiration: "8h"
+      inactivity: "30m"
       remember_me: "1M"
 
 # --- Identité / reset password ----------------------------------------------
