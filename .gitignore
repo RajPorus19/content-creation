@@ -22,3 +22,6 @@ __pycache__/
 
 # Sorties du moteur (MP4 générés)
 /engine/output/
+
+# Clips gameplay téléchargés (assets locaux, gros binaires — voir engine/README.md)
+/engine/assets/backgrounds/

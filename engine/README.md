@@ -40,9 +40,30 @@ python3 engine/engine.py --file /tmp/post.txt
 
 ## Changer le fond (gameplay)
 
-Remplace `engine/assets/background.mp4` par ton clip de gameplay **vertical
-1080×1920** (Minecraft parkour, Subway Surfers…). Le moteur le met en boucle à
-la longueur de l'audio. Ou passe `--background /chemin/vers/clip.mp4`.
+Le moteur choisit **au hasard** un clip dans `engine/assets/backgrounds/*.mp4`
+(s'il n'y en a pas, il retombe sur `engine/assets/background.mp4`, le dégradé).
+
+```bash
+# Télécharger un fond gameplay (ici : Minecraft parkour, source RedditVideoMakerBot)
+# ⚠️ Il FAUT --cookies-from-browser firefox + --js-runtimes node (sinon YouTube 403)
+#     et forcer le codec H.264 (-S vcodec:avc1), l'AV1 faisant planter le décodage ffmpeg.
+yt-dlp --cookies-from-browser firefox \
+  --js-runtimes "node:$HOME/.nvm/versions/node/v25.8.2/bin/node" \
+  -S "vcodec:avc1,res:720" \
+  -o "engine/assets/backgrounds/minecraft-parkour.%(ext)s" \
+  "https://www.youtube.com/watch?v=n_Dv4JMiwK8"
+
+# Découper un segment de 2 min (stream copy, instantané) puis supprimer le fichier complet
+ffmpeg -y -ss 600 -i engine/assets/backgrounds/minecraft-parkour.mp4 -t 120 \
+  -c copy -an engine/assets/backgrounds/minecraft-parkour-loop.mp4
+rm engine/assets/backgrounds/minecraft-parkour.mp4
+```
+
+Ou passe un clip vertical 1080×1920 directement : `--background /chemin/clip.mp4`.
+
+Liste de fonds (Minecraft parkour, GTA, Rocket League, CSGO surf…) dans le repo
+[RedditVideoMakerBot](https://github.com/elebumm/RedditVideoMakerBot) →
+`utils/background_videos.json`.
 
 ## Changer / ajouter une voix
 

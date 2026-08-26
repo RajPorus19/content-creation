@@ -19,6 +19,7 @@ Dépendances : python3 + requests (déjà dispo), ffmpeg/ffprobe (déjà install
 from __future__ import annotations
 
 import argparse
+import random
 import re
 import subprocess
 import sys
@@ -35,10 +36,22 @@ import requests
 TTS_URL = "http://127.0.0.1:8082/v1/tts"      # fish-server (bind localhost)
 VOICE = "narrator"                            # reference_id → references/narrator/
 HERE = Path(__file__).resolve().parent
-BACKGROUND = HERE / "assets" / "background.mp4"
+BACKGROUNDS_DIR = HERE / "assets" / "backgrounds"   # clips gameplay réels (yt-dlp)
+BACKGROUND_FALLBACK = HERE / "assets" / "background.mp4"  # dégradé par défaut
 OUTPUT_DIR = HERE / "output"
 GAP_SECONDS = 0.35                            # silence entre phrases
 SAMPLE_RATE = 44100
+
+
+def choose_background(explicit: str | None) -> Path:
+    """Choisit le fond : celui passé en --background, sinon un clip aléatoire de
+    assets/backgrounds/, sinon le dégradé par défaut."""
+    if explicit and Path(explicit).is_file():
+        return Path(explicit)
+    clips = sorted(BACKGROUNDS_DIR.glob("*.mp4"))
+    if clips:
+        return random.choice(clips)
+    return BACKGROUND_FALLBACK
 
 # --------------------------------------------------------------------------- #
 #  Étape 1 — nettoyage + découpage en phrases
@@ -227,7 +240,7 @@ def main() -> int:
     ap.add_argument("--text", type=str, default="", help="Corps du post")
     ap.add_argument("--file", type=str, default="", help="Fichier texte contenant le post")
     ap.add_argument("--voice", type=str, default=VOICE, help="reference_id (voix)")
-    ap.add_argument("--background", type=str, default=str(BACKGROUND))
+    ap.add_argument("--background", type=str, default="", help="Chemin du fond (défaut: clip aléatoire de assets/backgrounds/)")
     ap.add_argument("--output", type=str, default="", help="Chemin de sortie (défaut: auto)")
     args = ap.parse_args()
 
@@ -290,7 +303,9 @@ def main() -> int:
         output = Path(args.output)
     print("🎬  Assemblage du MP4 (FFmpeg)...")
     narration_dur = audio_duration(narration)
-    assemble(Path(args.background), narration, ass, output, narration_dur)
+    background = choose_background(args.background or None)
+    print(f"   Fond utilisé : {background.name}")
+    assemble(background, narration, ass, output, narration_dur)
 
     total = sum(durations) + GAP_SECONDS * (len(durations) - 1)
     print(f"\n✅ MP4 généré : {output}")
