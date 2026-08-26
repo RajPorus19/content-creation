@@ -70,6 +70,23 @@ services:
     networks:
       - proxy
 
+  homer:
+    image: b4bz/homer:latest
+    container_name: cc-homer
+    restart: unless-stopped
+    volumes:
+      - ./homer/assets:/www/assets
+    labels:
+      # Dashboard racine -> https://DOMAIN/  (catch-all du domaine)
+      - "traefik.enable=true"
+      - "traefik.http.routers.homer.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.homer.entrypoints=websecure"
+      - "traefik.http.routers.homer.tls=true"
+      - "traefik.http.routers.homer.middlewares=authelia-auth@file,security-headers@file"
+      - "traefik.http.services.homer.loadbalancer.server.port=8080"
+    networks:
+      - proxy
+
 #  ---------------------------------------------------------------------------
 #  EXEMPLE : ajouter une app derrière un chemin (/whoami)
 #  Décommente ce bloc et adapte. ⚠️ L'app DOIT accepter d'être servie sous un

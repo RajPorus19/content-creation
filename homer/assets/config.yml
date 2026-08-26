@@ -1,0 +1,34 @@
+---
+# =============================================================================
+#  Homer — dashboard de la stack content-creation
+#  Ce fichier vit dans ./homer/assets/config.yml (monté dans /www/assets).
+#  Ajoute tes apps dans la section "services" ci-dessous.
+# =============================================================================
+
+title: "Content Creation"
+subtitle: "Mes apps — accès protégé (Authelia + 2FA)"
+
+header: true
+footer: false
+
+theme: default
+
+links:
+  - name: "Compte Authelia (mot de passe / 2FA)"
+    icon: "fas fa-shield-alt"
+    url: "https://auth.content-creation.example.com"
+    target: "_blank"
+
+services:
+  - name: "Applications"
+    icon: "fas fa-th-large"
+    items:
+      # Exemple d'app (décommente et adapte quand tu m'ajoutes des apps) :
+      # - name: "Mon App"
+      #   subtitle: "Petite description"
+      #   icon: "fas fa-cube"
+      #   url: "https://content-creation.example.com/monapp"
+      #   target: "_blank"
+      - name: "Bientôt…"
+        subtitle: "Tes apps apparaîtront ici au fur et à mesure"
+        icon: "fas fa-spinner"
