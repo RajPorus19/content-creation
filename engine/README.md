@@ -19,26 +19,31 @@ Reddit** (mode sombre) en overlay sur un **fond gameplay**, le tout narré par
 ## Lancer
 
 ```bash
-python3 engine/engine.py \
-  --title "AITA for refusing to pay for my roommate's dog?" \
-  --text "So my roommate got a dog without asking me. The dog chewed up my shoes."
+# Post depuis un fichier : 1ère ligne = titre, reste = corps (paragraphes)
+python3 engine/engine.py --file /tmp/post.txt \
+  --subreddit relationship_advice --username ThrowRABoylceen \
+  --speed 1.25
+
+# Ou titre + texte en argument
+python3 engine/engine.py --title "AITA for..." --text "So my roommate..."
 
 # Options
---subreddit AmItheAsshole   # r/<subreddit> affiché sur la carte
---username throwaway_dog    # u/<username> affiché
---upvotes 12800             # 0 = aléatoire réaliste
---comments 342              # 0 = aléatoire réaliste
---voice narrator            # voix (references/<voix>)
---background /chemin/x.mp4  # fond (défaut: aléatoire dans assets/backgrounds/)
---output /tmp/x.mp4         # sortie (défaut: engine/output/*.mp4)
---file /tmp/post.txt        # post depuis un fichier (titre en 1ère ligne)
+--subreddit relationship_advice  # r/<subreddit> sur la carte
+--username throwaway_dog         # u/<username> sur la carte
+--upvotes 762                    # 0 = aléatoire réaliste
+--comments 410                   # 0 = aléatoire réaliste
+--speed 1.25                     # vitesse de lecture (x1.25 pour capter l'audience)
+--voice narrator                 # voix (references/<voix>)
+--background /chemin/x.mp4       # fond (défaut: aléatoire dans assets/backgrounds/)
+--output /tmp/x.mp4              # sortie (défaut: engine/output/*.mp4)
 ```
 
-## Pipeline
+## Pipeline (story mode)
 
-1. Rend la carte du post (screenshot Reddit mode sombre, Pillow).
-2. TTS Fish Speech du titre + corps (par morceaux sûrs, concaténés).
-3. Assemble le MP4 : fond gameplay en boucle + carte centrée (opacité 95 %) + narration.
+1. Découpe le post en **segments** : titre + 1er paragraphe, puis 1 carte par paragraphe.
+2. Rend **une carte façon screenshot Reddit par segment** (elles défilent au fil de la narration).
+3. TTS Fish Speech de chaque segment, concatène, puis **accélère l'audio (atempo x1.25)**.
+4. Assemble le MP4 : fond gameplay en boucle + cartes en overlay séquencées + narration.
 
 ## Changer le fond (gameplay)
 
