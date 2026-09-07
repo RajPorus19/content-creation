@@ -1,5 +1,7 @@
 # Secrets & données locales — ne jamais committer
 .env
+tiktok_cookie.txt
+reddit_cookie.txt
 
 # Certificats ACME (contient des clés privées)
 traefik/certs/*
@@ -15,7 +17,6 @@ authelia/notifications.txt
 /brightbean-studio/
 /fish-speech/
 
-
 # Python
 __pycache__/
 *.pyc
@@ -25,3 +26,13 @@ __pycache__/
 
 # Clips gameplay téléchargés (assets locaux, gros binaires — voir engine/README.md)
 /engine/assets/backgrounds/
+
+# Vivier de posts Reddit (donnée régénérable via scripts/fetch_candidates.py)
+reddit_candidates.json
+reddit_candidats.md
+
+# Config de batch locale (générée à chaque run)
+scripts/batch_current.json
+
+# TikTok upload : MP4 téléchargés + manifest local + suivi des uploads
+tiktok_upload/

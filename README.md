@@ -174,3 +174,77 @@ connexion.
 - **Dashboard Traefik** (`:8081`) est en local seulement et en clair — à
   protéger ou retirer (`insecure: true` dans `traefik/traefik.yml`).
 - Le réseau `proxy` est partagé : toutes les futures apps doivent s'y attacher.
+
+## Pipeline de shorts vidéo (Reddit → YouTube / TikTok)
+
+Le cœur du projet : transformer des histoires Reddit en **shorts verticaux
+narrés** (voix française homme/femme), publiés sur YouTube (« Ma chaîne »
+@yourchannel) et TikTok (« yourusername »).
+
+### 1. Sourcing des posts — `scripts/fetch_candidates.py`
+
+Récupère les posts de 13 subreddits (`relationship_advice`, `AITAH`,
+`AmItheAsshole`, `TrueOffMyChest`…) via l'API publique `.json`, filtre
+(`selftext ≥ 1500` caractères, `score ≥ 100`), détecte le genre du narrateur et
+met à jour le vivier `reddit_candidates.json` (+ version lisible
+`reddit_candidats.md`).
+
+```bash
+python3 scripts/fetch_candidates.py
+```
+
+- Cookies Reddit : `reddit_cookie.txt` (gitignoré) — optionnel, l'API publique
+  marche sans mais peut être limitée en débit.
+- Le vivier est gitignoré (donnée régénérable). `done=true` = post déjà traité.
+
+### 2. Génération vidéo — `engine/`
+
+`engine/engine.py` transforme un post (titre + paragraphes) en **MP4 vertical
+9:16** : cartes « screenshot Reddit » rendues localement + voix off Fish Speech
+(`homme` = fr-FR-HenriNeural, `femme` = fr-FR-DeniseNeural) + fond gameplay
+silencieux, accéléré ×1.25. Voir `engine/README.md`.
+
+### 3. Batch YouTube — `scripts/run_batch.py`
+
+Sélectionne 3 posts du vivier, génère les 3 shorts, les **programme** sur la
+chaîne YouTube « Ma chaîne » (via BrightBean) pour le soir 18h/19h/20h Paris,
+supprime les MP4 locaux et marque les posts `done`.
+
+```bash
+python3 scripts/run_batch.py scripts/batch_current.json
+```
+
+`batch_current.json` décrit les 3 posts (script FR + voix + titre/description
+YouTube). Il est généré chaque matin par le **cron Hermes quotidien** (07:00
+Paris) qui enchaîne 3 shorts/jour automatiquement.
+
+### 4. Upload TikTok — `scripts/tiktok_upload.py`
+
+Re-publie sur TikTok les MP4 déjà publiés sur YouTube, via l'interface web et
+les cookies de session du compte « yourusername » :
+
+```bash
+# une vidéo
+python3 scripts/tiktok_upload.py tiktok_upload/aout/foo.mp4 "Ma description"
+
+# un lot (manifest JSON)
+python3 scripts/tiktok_upload.py --manifest tiktok_upload/manifest.json
+```
+
+- Cookies TikTok : `tiktok_cookie.txt` (gitignoré).
+- Les vidéos déjà uploadées (listées dans `tiktok_upload/uploaded.txt`) sont
+  sautées → relance idempotente.
+- Chaque vidéo passe par la « vérification de contenu » TikTok (~10 min) puis
+  devient publique.
+
+### Secrets (jamais commités)
+
+| Fichier | Rôle |
+|---|---|
+| `.env` | clés Authelia, Cloudflare, BrightBean |
+| `tiktok_cookie.txt` | session TikTok (yourusername) |
+| `reddit_cookie.txt` | session Reddit |
+
+Le tout est couvert par `.gitignore`. Les templates (`.env.example`,
+`brightbean-studio/.env.example`) documentent les variables à renseigner.
+
