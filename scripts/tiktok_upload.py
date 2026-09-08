@@ -75,54 +75,62 @@ def click_text(page, texts: list[str]) -> bool:
 
 
 def clear_overlays(page) -> None:
-    """Ferme cookie banner + tour guidé + modales de première utilisation."""
+    """Ferme cookie banner + tour guidé + modales de première utilisation.
+
+    TikTok Studio 2026 : le tour « Nouvelles fonctionnalités d'édition » et la
+    bannière cookies bloquent le clic sur « Publier ». On les ferme en cliquant
+    les VRAIS boutons (button:has-text), pas des conteneurs.
+    """
     for _ in range(10):
-        for text in COOKIE_ACCEPT:
-            try:
-                el = page.query_selector(f"tiktok-cookie-banner button:has-text('{text}')")
-                if el and el.is_visible():
-                    el.click(force=True)
-                    time.sleep(1)
-                    break
-            except Exception:
-                pass
-        if click_text(page, TOUR_DISMISS):
-            continue
-        click_text(page, ["Annuler"])
-        time.sleep(0.5)
+        if not (click_text(page, COOKIE_ACCEPT)
+                or click_text(page, ["Décliner les cookies facultatifs", "Decline optional cookies"])
+                or click_text(page, TOUR_DISMISS)
+                or click_text(page, ["Activer"])):
+            break
+        time.sleep(0.3)
 
 
 def set_caption(page, caption: str) -> None:
-    """Remplit la description en effaçant d'abord le nom de fichier auto-rempli."""
+    """Remplit la description en effaçant d'abord le nom de fichier auto-rempli.
+
+    La description est un DraftEditor (React contenteditable) : il faut
+    `focus()` (pas `click(force=True)`, qui ne focusse pas l'éditeur) puis
+    `insert_text()` pour gérer emojis + accents.
+    """
     cap = page.query_selector("div[contenteditable='true']")
     if not cap:
         return
-    cap.click(force=True)
+    cap.focus()
+    time.sleep(0.4)
     page.keyboard.press("Control+A")
     page.keyboard.press("Backspace")
-    page.keyboard.type(caption, delay=15)
+    time.sleep(0.2)
+    page.keyboard.insert_text(caption)
 
 
 def upload_one(page, video_path: str, caption: str) -> tuple[bool, str]:
     """Upload une vidéo, la décrit et la publie. Retourne (ok, extrait)."""
     page.goto(UPLOAD_URL, wait_until="domcontentloaded", timeout=60_000)
     time.sleep(3)
+    clear_overlays(page)
 
     file_input = page.wait_for_selector("input[type=file]", state="attached", timeout=30_000)
     file_input.set_input_files(video_path)
 
     page.wait_for_selector("button:has-text('Publier')", state="attached", timeout=120_000)
-    time.sleep(3)
+    time.sleep(8)
     clear_overlays(page)
     set_caption(page, caption)
     clear_overlays(page)
 
     publish = page.query_selector("button:has-text('Publier')")
+    publish.scroll_into_view_if_needed()
+    time.sleep(1)
     publish.click(force=True)
-    time.sleep(3)
+    time.sleep(4)
     # « Continuer à publier ? » → confirme malgré la vérification en cours
     click_text(page, PUBLISH_NOW)
-    time.sleep(6)
+    time.sleep(8)
 
     text = page.inner_text("body")
     ok = ("en cours d'examen" in text) or ("Créé le" in text) or ("J'aime" in text)
