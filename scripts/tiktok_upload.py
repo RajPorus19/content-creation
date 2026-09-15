@@ -31,8 +31,9 @@ from playwright.sync_api import sync_playwright
 # Configuration
 # --------------------------------------------------------------------------- #
 
-TIKTOK_COOKIE = "/home/USER/content-creation/tiktok_cookie.txt"
-TIKTOK_UPLOADED = "/home/USER/content-creation/tiktok_upload/uploaded.txt"
+CC_DIR = Path.home() / "content-creation"
+TIKTOK_COOKIE = str(CC_DIR / "tiktok_cookie.txt")
+TIKTOK_UPLOADED = str(CC_DIR / "tiktok_upload" / "uploaded.txt")
 UPLOAD_URL = "https://www.tiktok.com/upload?lang=fr"
 
 USER_AGENT = (

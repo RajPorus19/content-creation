@@ -23,9 +23,10 @@ from pathlib import Path
 # Configuration
 # --------------------------------------------------------------------------- #
 
-REDDIT_COOKIE = "/home/USER/content-creation/reddit_cookie.txt"  # gitignoré
-POOL_JSON = "/home/USER/content-creation/reddit_candidates.json"
-POOL_MD = "/home/USER/content-creation/reddit_candidats.md"
+CC_DIR = Path.home() / "content-creation"
+REDDIT_COOKIE = str(CC_DIR / "reddit_cookie.txt")  # gitignoré
+POOL_JSON = str(CC_DIR / "reddit_candidates.json")
+POOL_MD = str(CC_DIR / "reddit_candidats.md")
 
 SUBREDDITS = [
     "relationship_advice", "AmItheAsshole", "AITAH", "JUSTNOMIL",

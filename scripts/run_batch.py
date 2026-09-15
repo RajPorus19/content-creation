@@ -20,11 +20,12 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-ENGINE = "/home/USER/content-creation/engine/engine.py"
-OUTDIR = Path("/home/USER/content-creation/engine/output")
-PY = "/home/USER/.hermes/hermes-agent/venv/bin/python3"
-CC = "/home/USER/content-creation"
-POOL = "/home/USER/content-creation/reddit_candidates.json"
+CC_DIR = Path.home() / "content-creation"
+ENGINE = str(CC_DIR / "engine" / "engine.py")
+OUTDIR = CC_DIR / "engine" / "output"
+PY = str(Path.home() / ".hermes" / "hermes-agent" / "venv" / "bin" / "python3")
+CC = str(CC_DIR)
+POOL = str(CC_DIR / "reddit_candidates.json")
 
 
 def _env(name: str) -> str:
