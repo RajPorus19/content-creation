@@ -11,6 +11,9 @@ batch.json = {"posts": [ {slug, subreddit, voice, upvotes, comments, source_id,
 Schedule: the posts are scheduled for the next N evening slots at 18:00 / 19:00 /
 20:00 Europe/Paris (today if it's still before 17:00 Paris, else tomorrow). The
 brightbean worker auto-publishes each when its scheduled_at passes.
+
+Required env vars (never committed, see .env.example / cron env):
+    CC_WORKSPACE_ID, CC_ORG_ID, CC_USER_ID, CC_YT_ACCOUNT_ID
 """
 import json, subprocess, sys, os
 from pathlib import Path
@@ -23,10 +26,21 @@ PY = "/home/USER/.hermes/hermes-agent/venv/bin/python3"
 CC = "/home/USER/content-creation"
 POOL = "/home/USER/content-creation/reddit_candidates.json"
 
-WS = "[REDACTED]"
-ORG = "[REDACTED]"
-USER = "[REDACTED]"
-YT = "[REDACTED]"  # YouTube "Ma chaîne" @yourchannel
+
+def _env(name: str) -> str:
+    """Lit une variable d'environnement obligatoire (jamais commitée en clair)."""
+    val = os.environ.get(name)
+    if not val:
+        sys.exit(f"Variable d'environnement requise manquante : {name}")
+    return val
+
+
+# Identifiants internes BrightBean — fournis via l'environnement (jamais commités).
+#   CC_WORKSPACE_ID, CC_ORG_ID, CC_USER_ID, CC_YT_ACCOUNT_ID (YouTube « Ma chaîne »)
+WS = _env("CC_WORKSPACE_ID")
+ORG = _env("CC_ORG_ID")
+USER = _env("CC_USER_ID")
+YT = _env("CC_YT_ACCOUNT_ID")  # YouTube "Ma chaîne" @yourchannel
 
 SLOT_HOURS = [18, 19, 20]  # Paris local hours
 

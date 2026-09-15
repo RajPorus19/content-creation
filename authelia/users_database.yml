@@ -1,23 +1,16 @@
+# =============================================================================
+#  Utilisateurs Authelia (EXEMPLE — hash factice)
+#
+#  ⚠️ CE DÉPÔT EST PUBLIC : ne commite JAMAIS un vrai hash de mot de passe.
+#  Pour créer ton utilisateur réel :
+#      ./scripts/add-user.sh <pseudo> <motdepasse>
+#  puis colle le bloc YAML retourné sous la clé "users:" ci-dessous.
+#  (Si tu héberges toi-même le portail, garde ce fichier hors de git.)
+# =============================================================================
 users:
     utilisateur:
-        password: [REDACTED]
+        password: $argon2id$v=19$m=65536,t=3,p=4$REMPLACE_MOI$REMPLACE_MOI
         displayname: Utilisateur
         email: utilisateur@example.com
         groups:
             - admins
-        given_name: ""
-        middle_name: ""
-        family_name: ""
-        nickname: ""
-        gender: ""
-        birthdate: ""
-        website: ""
-        profile: ""
-        picture: ""
-        zoneinfo: ""
-        locale: ""
-        phone_number: ""
-        phone_extension: ""
-        disabled: false
-        address: null
-        extra: {}
